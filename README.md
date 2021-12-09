@@ -8,4 +8,4 @@
 
 Files associated with the MBON-ATN proposal.
 
-![station figure](figures/mbon-atn_map.png)
+![station figure](Figures/mbon-atn_map.png)
