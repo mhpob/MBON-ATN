@@ -7,7 +7,7 @@ md_coast <- read_sf('data and imports/mapping/mid-atlantic/matl_states_land.shp'
 atl_coast <- read_sf('data and imports/mapping/natural earth/ne_10m_coastline.shp')%>%
   st_transform(4326)
 
-bathy <- read_sf('data and imports/mapping/bathymetry/test.gpkg') %>% 
+bathy <- read_sf('data and imports/mapping/bathymetry_midatl.gpkg') %>% 
                  # query = 'select * from test where elev_m > -50') %>%
   st_transform(4326) %>%
   filter(as.numeric(st_length(.))> 30000) 
