@@ -16,11 +16,10 @@ bathy <- read_sf('data and imports/mapping/bathymetry_midatl.gpkg') %>%
 
 lanes <- read_sf('data and imports/mapping/shippinglanes/shippinglanes.shp',
                  query = "select * from shippinglanes where THEMELAYER like 'Traffic%'") %>% 
-  st_crop(xmin = -75.15, xmax = -74.6, ymin = 38.2, ymax = 38.5)
+  st_crop(xmin = -75.15, xmax = -74.34, ymin = 38.14, ymax = 38.46)
 
-wea <- st_read('data and imports/mapping/offshore wind layers.gdb')
-# , 
-          # query = "select * from BOEM_Wind_Leases_as_of_Aug_3_2021 where State = 'Maryland'")
+wea <- st_read('data and imports/mapping/offshore wind layers.gdb',
+               query = "select * from BOEM_Wind_Leases_as_of_Aug_3_2021 where State = 'Maryland'")
 
 sites <- read.csv('data and imports/deployed_sites.csv') %>%
   st_as_sf(coords = c('longitude', 'latitude'),
@@ -30,7 +29,7 @@ sites <- read.csv('data and imports/deployed_sites.csv') %>%
 
 library(ggplot2); library(ggspatial); library(ragg)
 
-## Make a one-column map
+
 main <-
   ggplot() +
   geom_sf(data = bathy, color = 'gray', size = 0.1) +
