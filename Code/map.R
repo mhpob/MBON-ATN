@@ -14,6 +14,10 @@ bathy <- read_sf('data and imports/mapping/bathymetry_midatl.gpkg') %>%
 # %>%
   # st_crop(xmin = -75.15, xmax = -74.6, ymin = 38.2, ymax = 38.5)
 
+lanes <- read_sf('data and imports/mapping/shippinglanes/shippinglanes.shp',
+                 query = "select * from shippinglanes where THEMELAYER like 'Traffic%'") %>% 
+  st_crop(xmin = -75.15, xmax = -74.6, ymin = 38.2, ymax = 38.5)
+
 wea <- st_read('data and imports/mapping/offshore wind layers.gdb')
 # , 
           # query = "select * from BOEM_Wind_Leases_as_of_Aug_3_2021 where State = 'Maryland'")
@@ -38,6 +42,7 @@ main <-
   aes(x = x, y = y, label = lab),
   label.size = 0, label.padding = unit(0.1, "lines"), size = 1) +
   geom_sf(data = md_coast, size = 0.1) +
+  geom_sf(data = lanes) +
   geom_sf(data = wea, fill = NA, color = 'gray') +
   geom_sf(data = sites, aes(alpha = exp_type,
                             size = exp_type,
@@ -73,7 +78,7 @@ inset <- ggplotGrob(
 
 
 
-agg_tiff("figures/mbon-atn_map.tif",
+agg_tiff("figures/mbon-atn_map_shippinglanes.tif",
          # General ratio: 1065x536
          width = 6.5, height = 3.271,
          units = 'in', compression = 'lzw', res = 600)
