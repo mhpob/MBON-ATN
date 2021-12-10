@@ -18,12 +18,13 @@ lanes <- read_sf('data and imports/mapping/shippinglanes/shippinglanes.shp',
                  query = "select * from shippinglanes where THEMELAYER like 'Traffic%'") %>% 
   st_crop(xmin = -75.15, xmax = -74.34, ymin = 38.14, ymax = 38.46)
 
-wea <- st_read('data and imports/mapping/offshore wind layers.gdb',
-               query = "select * from BOEM_Wind_Leases_as_of_Aug_3_2021 where State = 'Maryland'")
+wea <- st_read('data and imports/mapping/offshore wind layers.gdb')
+# , query = "select * from BOEM_Wind_Leases_as_of_Aug_3_2021 where State = 'Maryland'")
 
-sites <- read.csv('data and imports/deployed_sites.csv') %>%
+sites <- read.csv('data and imports/deployed_sites.csv', na.strings = '') %>%
   st_as_sf(coords = c('longitude', 'latitude'),
-           crs = 4326)
+           crs = 4326) %>% 
+  mutate(plot_type = ifelse(is.na(proposed_data_type), historical_data_type, proposed_data_type))
 
 
 
@@ -41,18 +42,22 @@ main <-
   aes(x = x, y = y, label = lab),
   label.size = 0, label.padding = unit(0.1, "lines"), size = 1) +
   geom_sf(data = md_coast, size = 0.1) +
-  geom_sf(data = lanes) +
+  # geom_sf(data = lanes) +
   geom_sf(data = wea, fill = NA, color = 'gray') +
-  geom_sf(data = sites, aes(alpha = exp_type,
-                            size = exp_type,
-                            shape = inst_type)) +
+  geom_sf(data = sites,
+          aes(alpha = !is.na(proposed_data_type),
+              size = !is.na(proposed_data_type),
+              shape = plot_type,
+              fill = is.na(historical_data_type))) +
   scale_alpha_manual(values = c(0.2, 1), guide = 'none') +
   scale_size_manual(values = c(2, 4), guide = 'none') +
+  scale_shape_manual(values = c(21, 24, 22)) +
+  scale_fill_manual(values = c('black', NA), na.value = NA, guide = 'none') +
   coord_sf(xlim = c(-75.15, -74.34),
            ylim = c(38.14, 38.46)) +
   annotation_scale(text_cex = 0.5, height = unit(1, 'mm')) +
   annotation_north_arrow(location = 'tl') +
-  labs(x = NULL, y = NULL, shape = 'Instrument') +
+  labs(x = NULL, y = NULL, shape = 'Data type') +
   theme_bw() +
   theme(axis.text = element_text(size = 12 / .pt),
         axis.text.y = element_text(angle = 45, vjust = 0),
@@ -60,7 +65,8 @@ main <-
         axis.ticks = element_line(size = 0.1),
         plot.margin = unit(c(0, 0, 0, 0), 'mm'),
         legend.position = c(0.9, 0.82),
-        legend.background = element_rect(fill=alpha('white', 0.7)))
+        legend.background = element_rect(fill = alpha('white', 0.5))) +
+  guides(shape = guide_legend(override.aes = list(fill = 'black')))
 
 inset <- ggplotGrob(
   ggplot() +
@@ -77,7 +83,7 @@ inset <- ggplotGrob(
 
 
 
-agg_tiff("figures/mbon-atn_map_shippinglanes.tif",
+agg_tiff("figures/mbon-atn_map.tif",
          # General ratio: 1065x536
          width = 6.5, height = 3.271,
          units = 'in', compression = 'lzw', res = 600)
@@ -90,3 +96,15 @@ main +
 
 dev.off()
 
+agg_tiff("figures/mbon-atn_map.png",
+         # General ratio: 1065x536
+         width = 6.5, height = 3.271,
+         units = 'in', res = 600)
+
+
+main +
+  annotation_custom(inset,
+                    xmin = -74.47, xmax = -74.31,
+                    ymin = 38.1, ymax = 38.3)
+
+dev.off()
