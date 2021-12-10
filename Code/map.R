@@ -96,10 +96,10 @@ main +
 
 dev.off()
 
-agg_tiff("figures/mbon-atn_map.png",
+agg_png("figures/mbon-atn_map.png",
          # General ratio: 1065x536
          width = 6.5, height = 3.271,
-         units = 'in', res = 600)
+         units = 'in', res = 72)
 
 
 main +
