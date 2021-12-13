@@ -48,7 +48,8 @@ main <-
           aes(alpha = !is.na(proposed_data_type),
               size = !is.na(proposed_data_type),
               shape = plot_type,
-              fill = is.na(historical_data_type))) +
+              fill = is.na(historical_data_type)),
+          show.legend = F) +
   scale_alpha_manual(values = c(0.2, 1), guide = 'none') +
   scale_size_manual(values = c(2, 4), guide = 'none') +
   scale_shape_manual(values = c(21, 24, 22)) +
@@ -63,10 +64,11 @@ main <-
         axis.text.y = element_text(angle = 45, vjust = 0),
         panel.grid = element_line(size = 0.1),
         axis.ticks = element_line(size = 0.1),
-        plot.margin = unit(c(0, 0, 0, 0), 'mm'),
-        legend.position = c(0.9, 0.82),
-        legend.background = element_rect(fill = alpha('white', 0.5))) +
-  guides(shape = guide_legend(override.aes = list(fill = 'black')))
+        plot.margin = unit(c(0, 0, 0, 0), 'mm'))
+        # legend.position = c(0.9, 0.82),
+        # legend.background = element_rect(fill = alpha('white', 0.5))) 
+# +
+  # guides(shape = guide_legend(override.aes = list(fill = 'black')))
 
 inset <- ggplotGrob(
   ggplot() +
@@ -99,7 +101,7 @@ dev.off()
 agg_png("figures/mbon-atn_map.png",
          # General ratio: 1065x536
          width = 6.5, height = 3.271,
-         units = 'in', res = 72)
+         units = 'in', res = 300)
 
 
 main +
