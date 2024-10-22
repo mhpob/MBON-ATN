@@ -1,0 +1,262 @@
+---
+title: "MBON Deployment Cruise"
+subtitle: "November 4-5, 2024   *R/V Daiber*   Lewes, DE"
+format: docx
+editor: visual
+echo: false
+message: false
+warning: false
+params:
+  participants:
+    value:
+      p1: "Aaron Carlisle"
+      p2: "Peter Thielen"
+      p3: "Beth Bowers"
+      p4: "Caroline Tribble"
+  start:
+    value:
+      d1: '2024-11-05 06:00'
+  op_time:
+    value:
+      edna: 15
+      mooring: 10
+  vessel_sp_kts: 17
+---
+
+```{r}
+#| label: params
+library(sf); library(ggplot2); library(TSP); library(units); library(dplyr)
+```
+
+```{r}
+#| label: geo-base
+
+turbines <- st_read(
+    "../../Data and Imports/mapping/wtg_locations_202211.gpkg",
+    quiet = TRUE
+)
+```
+
+```{r}
+#| label: combine-sites
+stations <- st_read(
+    "../../Data and Imports/proposed_sites.csv",
+        options = c(
+        'X_POSSIBLE_NAMES=longitude',
+        'Y_POSSIBLE_NAMES=latitude'
+    ),
+    crs = 4326,
+    quiet = TRUE
+) |> 
+  arrange(-longitude)
+
+lewes <- c(-75.15104, 38.81225) |>
+    st_point() |> 
+    st_sfc(crs = 4326) |> 
+    st_sf(geometry = _,
+        sites = 'Lewes',
+        historical_data_type = NA,
+        proposed_data_type = NA) |> 
+    mutate(longitude = st_coordinates(geometry)[,1],
+    latitude = st_coordinates(geometry)[,2])
+
+stations <- rbind(lewes, stations)
+
+
+dm <- function(x){
+  paste(as.integer(x), round((abs(x) %% 1) * 60, 4))
+}
+
+stations <- stations |> 
+    mutate(
+      lon_dm = dm(longitude),
+        lat_dm = dm(latitude))
+```
+
+```{r}
+#| label: calc-dist-matrices
+dist_calc <- function(stations, new_unit = 'nautical_mile'){
+  dist_mat <- st_distance(stations)
+  
+  dist_mat <- set_units(dist_mat, new_unit, mode = 'standard')
+  
+  rownames(dist_mat) <- stations$sites
+  colnames(dist_mat) <- stations$sites
+
+  dist_mat
+}
+
+tf <- function(dist_mat, speed, pretty = T){
+  mat <- dist_mat |>
+    as.numeric() |>
+    matrix(ncol = sqrt(length(dist_mat)))
+  
+  if(pretty == T){
+  mat <- (mat / speed) * 3600
+  
+  mat <- ceiling(mat / (5 * 60)) * (5 * 60)
+  
+  mat <- as.POSIXct(mat,
+                    tz = 'UTC',
+                    origin = '1970-01-01')
+  
+  mat <- format(mat, '%H h %M m')
+  
+  mat <- matrix(mat, ncol = sqrt(length(mat)))
+  
+  diag(mat) <- '-'
+  
+  }else{
+    mat <- ceiling((mat / speed) * 12) / 12
+    
+    mat <- matrix(mat, ncol = sqrt(length(mat)))
+  }
+  
+  rownames(mat) <- rownames(dist_mat)
+  colnames(mat) <- colnames(dist_mat)
+  
+  mat
+}
+
+nm_matrix <- round(dist_calc(stations), 2)
+time_matrix_raw <- tf(nm_matrix, params$vessel_sp_kts, pretty = F)
+time_matrix_pretty <- tf(nm_matrix, params$vessel_sp_kts)
+```
+
+```{r}
+#| label: cruise-seq
+
+deploy_seq <- tibble(start = stations$sites,
+                     end = lead(stations$sites, default = 'Lewes'),
+                     sttime = c(as.POSIXct(params$start$d1) + 30*60,
+                                    rep(NA, length(stations$sites)-1)),
+                      endtime = c(as.POSIXct(params$start$d1),
+                                     rep(NA, length(stations$sites)-1)),
+                      edna = c(as.POSIXct(params$start$d1),
+                                  rep(NA, length(stations$sites)-1)),
+                      mooring = c(as.POSIXct(params$start$d1),
+                                  rep(NA, length(stations$sites)-1)))
+
+deploy_seq[1,] <- deploy_seq[1,] |> 
+  mutate(endtime = sttime + time_matrix_raw[start, end] * 3600,
+         edna = endtime + params$op_time$edna * 60,
+         mooring = edna + params$op_time$mooring * 60)
+
+for(i in 2:nrow(deploy_seq)){
+  deploy_seq[i,] <- deploy_seq[i,] |> 
+    mutate(sttime = deploy_seq$mooring[i-1],
+           endtime = sttime + time_matrix_raw[start, end] * 3600,
+           edna = endtime + params$op_time$edna * 60,
+         mooring = edna + params$op_time$mooring * 60
+    )
+}
+
+deploy_seq[nrow(deploy_seq),] <- deploy_seq[nrow(deploy_seq),] |> 
+  mutate(edna = NA,
+         mooring = NA)
+```
+
+## Schedule, in brief
+
+### `r format(as.POSIXct(params$start$d1) - 24*60*60, '%d %B')`
+
+-   Crew arrives. Loads gear on *R/V Daiber*.
+
+### `r format(as.POSIXct(params$start$d1), '%d %B')`
+
+-   `r format(as.POSIXct(params$start$d1), '%H:%M')` Arrive at R/V Daiber
+-   `r paste(format(deploy_seq$sttime[1], '%H:%M'), format(deploy_seq$endtime[10], '%H:%M'), sep = ' - ')` eDNA sampling and mooring deployment
+
+```{r}
+library(leaflet)
+wms_enc <- 'https://gis.charttools.noaa.gov/arcgis/rest/services/MCS/ENCOnline/MapServer/exts/MaritimeChartService/WMSServer'
+leaflet() |> 
+  setView(lng = -74.7, lat = 38.336, zoom = 10) |> 
+  addWMSTiles(
+    wms_enc,
+    layers = c(0:3, 6),
+    options = WMSTileOptions(format = "image/png", transparent = T)
+  ) |> 
+  addCircles(data = turbines, color = 'black') |>
+  addCircleMarkers(data = stations, label = ~ sites,
+                   fillColor = ~ colorFactor(
+                     c('red', 'blue'),
+                     stations$proposed_data_type)(proposed_data_type),
+                   fillOpacity = 0.7) |> 
+  addPolylines(data = st_sfc(
+    st_cast(
+      do.call(c, st_geometry(stations)[c(1:nrow(stations), 1)]),
+      'LINESTRING'
+    ), crs = 4326
+  )) |>
+  addMeasure(primaryLengthUnit = 'meters', primaryAreaUnit = 'hectares') |>
+  addMiniMap(zoomLevelFixed = 7)
+```
+
+## Cruise plan; calculated at `r params$vessel_sp_kts` knots
+
+::::: columns
+::: {.column width="50%"}
+-   `r format(as.POSIXct(params$start$d1), '%H:%M')` Meet at *R/V Daiber*
+-   `r format(deploy_seq$sttime[1], '%H:%M')` Depart `r deploy_seq$start[1]` for **`r deploy_seq$end[1]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[1],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[1],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[1], '%H:%M')` Arrive **`r deploy_seq$end[1]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[1], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[1], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[2]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[2],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[2],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[2], '%H:%M')` Arrive **`r deploy_seq$end[2]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[2], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[2], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[3]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[3],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[3],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[3], '%H:%M')` Arrive **`r deploy_seq$end[3]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[3], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[3], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[4]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[4],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[4],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[4], '%H:%M')` Arrive **`r deploy_seq$end[4]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[4], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[4], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[5]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[5],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[5],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[5], '%H:%M')` Arrive **`r deploy_seq$end[5]`**. Conduct eDNA sampling.
+:::
+
+::: {.column width="50%"}
+-   `r format(deploy_seq$edna[5], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[5], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[6]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[6],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[6],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[6], '%H:%M')` Arrive **`r deploy_seq$end[6]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[6], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[6], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[7]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[7],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[7],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[7], '%H:%M')` Arrive **`r deploy_seq$end[7]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[7], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[7], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[8]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[8],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[8],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[8], '%H:%M')` Arrive **`r deploy_seq$end[8]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[8], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[8], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[9]`**
+-   <font size= "5"> **`r stations[stations$sites == deploy_seq$end[9],]$lat_dm`, `r stations[stations$sites == deploy_seq$end[9],]$lon_dm`** </font>
+-   `r format(deploy_seq$endtime[9], '%H:%M')` Arrive **`r deploy_seq$end[9]`**. Conduct eDNA sampling.
+-   `r format(deploy_seq$edna[9], '%H:%M')` Finish eDNA sampling and deploy mooring.
+-   `r format(deploy_seq$mooring[9], '%H:%M')` Complete operations. Depart for **`r deploy_seq$end[10]`**
+-   `r format(deploy_seq$endtime[10], '%H:%M')` Arrive **`r deploy_seq$end[10]`**.
+:::
+:::::
+
+## Distances
+
+```{r}
+#| label: dist-matrix
+nm_matrix |>
+  as.numeric() |>
+  matrix(ncol = length(stations$sites),
+         dimnames = list(stations$sites, stations$sites)) |>
+  knitr::kable('html', align = 'c', caption = 'Distance, nautical miles')
+
+time_matrix_pretty |>
+  matrix(ncol = length(stations$sites),
+         dimnames = list(stations$sites, stations$sites)) |> 
+  knitr::kable('html', align = 'c', caption = paste('Distance, time at', 
+                                                    params$vessel_sp_kts,
+                                                    'kts')
+  )
+```
