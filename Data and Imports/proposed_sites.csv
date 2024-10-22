@@ -1,0 +1,10 @@
+sites,latitude,longitude,historical_data_type,proposed_data_type
+MBON1,38.3360185143435,-75.015035,,Biotelemetry
+MBON2,38.3360481910918,-74.8736665215166,,Biotelemetry
+MBON3,38.3360481909798,-74.7983331281669,,Biotelemetry
+MBON4,38.3360448397831,-74.6503329766742,,Biotelemetry
+MBON5,38.3360448395467,-74.5776662561425,,Biotelemetry
+T-1C,38.336,-74.949,Both,Both
+A-5C,38.336,-74.723,Both,Both
+T-2C,38.336,-74.505,Both,Both
+T-3C,38.336,-74.35,Both,Both
